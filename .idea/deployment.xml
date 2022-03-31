@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="tomginsberg@10.63.18.10:22 agent (1)" autoUploadExternalChanges="true">
+    <serverData>
+      <paths name="tomginsberg@10.63.18.10:22 agent">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/voyager/projects/tomginsberg/detectron" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="tomginsberg@10.63.18.10:22 agent (1)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/voyager/projects/tomginsberg/detectron" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="tomginsberg@voyager:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/voyager/projects/tomginsberg/detectron" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
