@@ -1,10 +1,12 @@
 from models.pretrained import camelyon_model
 import pandas as pd
 from data.camelyon import CamelyonModule
+import torch
 
 model = camelyon_model(seed=0)
 model.eval()
 val_dl = CamelyonModule(val_samples=1000, batch_size=1024).val_dataloader()
+torch.set_grad_enabled(False)
 
 
 # Example of using the model to predict labels
@@ -37,8 +39,10 @@ def find_number_of_flagged_samples(seed, samples, shift,
                         test_seed=seed)
     td = dm.test_dataloader()
     flagged_samples = 0
-    for (x, y) in td:
-        flagged_samples += is_flagged(model, x, preprocess_info)
+    for (X, Y) in td:
+        # X is a batch of samples, iterate over each one
+        for x in X:
+            flagged_samples += is_flagged(model, x, preprocess_info)
 
     return {'seed': seed, 'samples': samples,
             'shift': shift, 'flagged': flagged_samples}
