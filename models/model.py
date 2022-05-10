@@ -1,25 +1,23 @@
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 
-import torchvision
 import pytorch_lightning as pl
 import torch
+
 from models import configs
-from models import loggers
 
 
 class Model(pl.LightningModule):
-    def __init__(self, model: torch.nn.Module, logger=None, loss=None, loss_params=None, optim=None, optim_params=None,
-                 scheduler=None, scheduler_params=None):
+    def __init__(self, model: torch.nn.Module, logger: str = None,
+                 logger_params: dict[str, Any] = None,
+                 loss: str = None, loss_params: dict[str, Any] = None, optim: str = None,
+                 optim_params: dict[str, Any] = None,
+                 scheduler: str = None, scheduler_params: dict[str, Any] = None):
         super().__init__()
         self.model = model
-        # self.sub_modules = torch.nn.ModuleDict()
-        # self.sub_modules.update(
-        #     {'loss_fn': configs.get_loss(loss, loss_params), 'logger': configs.get_logger(logger)(self)})
-
         self.optimizer = configs.get_optim(optim, optim_params)
         self.scheduler = configs.get_scheduler(scheduler, scheduler_params)
         self.loss_fn = configs.get_loss(loss, loss_params)
-        self._logger = configs.get_logger(logger)(self.log)
+        self._logger = configs.get_logger(logger)(self.log, **(logger_params or {}))
 
     def forward(self, x) -> torch.Tensor:
         return self.model(x)

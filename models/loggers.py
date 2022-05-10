@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from typing import List
 
 import pytorch_lightning as pl
-from torchmetrics import Accuracy
+from torchmetrics import Accuracy, AUROC
 import torch
+import torch.nn.functional as F
 
 
 class Logger(torch.nn.Module):
@@ -88,6 +89,42 @@ class AccuracyLogger(Logger):
         a = self.val_acc.compute()
         self.val_acc.reset()
         self.log('val_acc', a)
+
+
+class AUCLogger(Logger):
+    """
+    Logger for accuracy
+    """
+
+    def __init__(self, log_fn, log_on_step: bool = True, num_classes: int = 2):
+        super().__init__(log_fn)
+        self.train_auc = AUROC(num_classes=num_classes)
+        self.val_auc = AUROC(num_classes=num_classes)
+        self.log_on_step = log_on_step
+
+    def on_train(self, y_hat, y, loss=None):
+        a = self.train_auc(F.softmax(y_hat, dim=1), y)
+        if self.log_on_step:
+            self.log('train_auc_step', a)
+            if loss:
+                self.log('train_loss_step', loss)
+
+    def on_val(self, y_hat, y, loss=None):
+        a = self.val_auc(F.softmax(y_hat, dim=1), y)
+        if self.log_on_step:
+            self.log('val_auc_step', a)
+            if loss:
+                self.log('val_loss_step', loss)
+
+    def after_train(self):
+        a = self.train_auc.compute()
+        self.train_auc.reset()
+        self.log('train_auc', a)
+
+    def after_val(self):
+        a = self.val_auc.compute()
+        self.val_auc.reset()
+        self.log('val_auc', a)
 
 
 class LogitLogger(Logger):

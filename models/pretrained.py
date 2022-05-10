@@ -1,8 +1,11 @@
 from glob import glob
 
+import os
+from typing import Optional
+
 from tqdm import tqdm
 
-from models.classifier import TorchvisionClassifier
+from models.classifier import TorchvisionClassifier, MLP
 from models.distilbert import DistilBertClassifier
 import torch
 from utils.generic import key_replace
@@ -11,11 +14,18 @@ WILDS_PATH = '/voyager/projects/tomginsberg/wilds_models'
 CKPT_PATH = '/voyager/projects/tomginsberg/detectron/checkpoints'
 
 
+def to_device(device):
+    def to_device_fn(model):
+        if device is None:
+            return model
+        return model.to(device)
+
+    return to_device_fn
+
+
 def all_camelyon_model(return_names=False, device='cuda:1', wilds=False, eval_=True):
-    to_device = lambda x: x.to(device)
-    if device is None:
-        to_device = lambda x: x
-    models = [to_device(camelyon_model(seed=s, wilds=wilds)) for s in tqdm(range(10))]
+    to_device_fn = to_device(device)
+    models = [to_device_fn(camelyon_model(seed=s, wilds=wilds)) for s in tqdm(range(10))]
     if eval_:
         for m in models:
             m.eval()
@@ -57,3 +67,43 @@ def distillbert_on_civilcomments(seed=0, lr='1e-6', device='cuda:1', group_by_y=
             , 'model.')
     )
     return model.to(device)
+
+
+def resnet18_trained_on_cifar10(ckp='cifar/cifar10_resnet18/epoch=197-step=77417.ckpt',
+                                prefix: Optional[str] = CKPT_PATH):
+    model = TorchvisionClassifier(out_features=10, model='resnet18')
+    if isinstance(prefix, str):
+        ckp = os.path.join(prefix, ckp)
+    model.load_state_dict(torch.load(ckp)['state_dict'])
+    return model
+
+
+def resnet18_collection_trained_on_cifar10(return_names=False, device='cuda:1', eval_=True):
+    checkpoints = glob(os.path.join(CKPT_PATH, 'cifar/baselines/*/*.ckpt'))
+    to_device_fn = to_device(device)
+    models = [to_device_fn(resnet18_trained_on_cifar10(c, prefix=None)) for c in
+              tqdm(sorted(checkpoints, key=lambda x: int(x.split('/')[-2][-1])))]
+    if eval_:
+        for m in models:
+            m.eval()
+    if not return_names:
+        return models
+    return models, [f'cifar10_resnet18_pretrained_seed{seed}' for seed in
+                    range(10)]
+
+
+def mlp_trained_on_uci_heart(seed=0):
+    path = glob(f'{CKPT_PATH}/uci/baselines2/uci_mlp_seed{seed}/*.ckpt')[0]
+    return MLP.load_from_checkpoint(path)
+
+
+def mlp_collection_trained_on_uci_heart(return_names=False, device='cuda:1', eval_=True):
+    to_device_fn = to_device(device)
+    models = [to_device_fn(mlp_trained_on_uci_heart(seed)) for seed in range(10)]
+    if eval_:
+        for i, m in enumerate(models):
+            models[i] = m.eval()
+    if not return_names:
+        return models
+    return models, [f'uci_heart_seed{seed}' for seed in
+                    range(10)]

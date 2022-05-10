@@ -26,6 +26,7 @@ def get_loss(loss_name: str, params=None) -> Optional[torch.nn.Module]:
 logging_config: Dict[str, loggers.Logger.__class__] = {
     'accuracy': loggers.AccuracyLogger,
     'logits': loggers.LogitLogger,
+    'auc': loggers.AUCLogger,
 }
 
 

@@ -21,6 +21,9 @@ class RejectronMetric(Metric):
         self.acc_p = Accuracy()
         self.acc_q = Accuracy()
 
+        self.acc_p_all = Accuracy()
+        self.acc_q_all = Accuracy()
+
         self.p_seen = 0
         self.q_seen = 0
 
@@ -51,6 +54,7 @@ class RejectronMetric(Metric):
             # every sample is from p
             q_disagree = 0
             p_agree = (c_pred == h_pred)
+            self.acc_p_all.update(c_pred, labels)
             self.acc_p.update(c_pred[p_agree], labels[p_agree])
             p_agree = p_agree.sum().item()
 
@@ -59,21 +63,28 @@ class RejectronMetric(Metric):
             p_agree = 0
             q_disagree = (c_pred != h_pred)
             self.acc_q.update(c_pred[~q_disagree], -labels[~q_disagree] - 1)
+            self.acc_q_all.update(c_pred, -labels - 1)
             q_disagree = q_disagree.sum().item()
 
         else:
             c_p = c_pred[p_label_indices]
             c_q = c_pred[q_label_indices]
 
+            p_labels = labels[p_label_indices]
+            q_labels = labels[q_label_indices]
+
+            self.acc_p_all.update(c_p, p_labels)
+            self.acc_q_all.update(c_q, -q_labels - 1)
+
             p_mask = (c_p == h_pred[p_label_indices])
             q_mask = (c_q != h_pred[q_label_indices])
 
             # updates accuracy metrics where h and c agree
             if (p_agree := p_mask.sum().item()) > 0:
-                self.acc_p.update(c_p[p_mask], labels[p_label_indices][p_mask])
+                self.acc_p.update(c_p[p_mask], p_labels[p_mask])
 
             if (~q_mask).sum().item() > 0:
-                self.acc_q.update(c_q[~q_mask], -labels[q_label_indices][~q_mask] - 1)
+                self.acc_q.update(c_q[~q_mask], -q_labels[~q_mask] - 1)
 
             q_disagree = q_mask.sum().item()
 
@@ -82,27 +93,32 @@ class RejectronMetric(Metric):
 
         # return dict(p_agree=p_agree / num_q, q_disagree=q_disagree / num_q, p_acc=acc_p, q_acc=acc_q)
 
+    @staticmethod
+    def acc_or_1(acc_metric: Accuracy):
+        if acc_metric.mode is None:
+            return 1
+        return acc_metric.compute()
+
     def compute(self) -> Any:
         if self.val:
             return itemize(dict(
                 val_agree=self.p_agree / self.p_seen,
                 val_acc=self.acc_p.compute(),
+                val_acc_all=self.acc_p_all.compute()
             ))
-        if self.acc_q.mode is None:
-            test_acc = 1
-        else:
-            test_acc = self.acc_q.compute()
+        test_acc = self.acc_or_1(self.acc_q)
+        test_acc_all = self.acc_or_1(self.acc_q_all)
         return itemize(
             dict(
                 train_agree=self.p_agree / self.p_seen,
                 test_reject=self.q_disagree / self.q_seen,
                 train_acc=self.acc_p.compute(),
+                train_acc_all=self.acc_p_all.compute(),
                 test_acc=test_acc,
+                test_acc_all=test_acc_all,
                 # overall P/Q score:
-                #   a score of 1 is achieved by agreeing on everything in P and disagreeing on everything in Q
-                # p_q_score=(self.q_disagree + self.p_agree * (self.beta + self.q_seen)) / (
-                #         self.q_seen + self.p_seen * (self.beta + self.q_seen))
-                p_q_score=int(100 * self.p_agree / self.p_seen) + self.q_disagree / self.q_seen / 10
+                #   a score of 100 is achieved by agreeing on everything in P and disagreeing on everything in Q
+                p_q_score=(100 * self.p_agree / self.p_seen).round() + self.q_disagree / self.q_seen
             )
         )
 
@@ -112,6 +128,8 @@ class RejectronMetric(Metric):
 
         self.acc_p.reset()
         self.acc_q.reset()
+        self.acc_q_all.reset()
+        self.acc_p_all.reset()
 
         self.p_seen = 0
         self.q_seen = 0

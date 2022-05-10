@@ -12,7 +12,7 @@ def trainer(run_name: str, ckpt_path: str, model: pl.LightningModule,
             gpus=(1,), max_epochs=100,
             monitor='val_acc', min_delta=0, patience=50, verbose=True, mode='max',
             project='detectron', offline=False,
-            log_every_n_steps=10,
+            log_every_n_steps=10
             ) -> pl.LightningModule:
     pl.seed_everything(seed, workers=True)
 
@@ -26,7 +26,6 @@ def trainer(run_name: str, ckpt_path: str, model: pl.LightningModule,
             ckpt = ckpt[0]
 
     trainer = pl.Trainer(
-        auto_select_gpus=True,
         gpus=gpus,
         max_epochs=max_epochs,
         deterministic=True,

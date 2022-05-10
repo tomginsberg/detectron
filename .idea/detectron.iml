@@ -7,4 +7,7 @@
     <orderEntry type="jdk" jdkName="Remote Python 3.9.5 (sftp://tomginsberg@voyager:22/voyager/projects/tomginsberg/.conda/envs/pqlearning/bin/python)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
+  <component name="PyDocumentationSettings">
+    <option name="renderExternalDocumentation" value="true" />
+  </component>
 </module>

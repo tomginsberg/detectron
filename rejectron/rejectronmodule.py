@@ -1,6 +1,6 @@
 from glob import glob
 from os import path
-from typing import Union, Tuple, Dict
+from typing import Union, Tuple, Dict, Iterable
 
 import pytorch_lightning as pl
 import torch
@@ -23,7 +23,7 @@ class CWarpper(pl.LightningModule):
 
 
 class RejectronModule(pl.LightningModule):
-    def __init__(self, h: pl.LightningModule, **kwargs):
+    def __init__(self, h: pl.LightningModule, C: Iterable[Union[RejectronStep, pl.LightningModule]] = None, **kwargs):
         """
 
         :param h:
@@ -31,6 +31,8 @@ class RejectronModule(pl.LightningModule):
         """
         super().__init__(**kwargs)
         self.C = torch.nn.ModuleList()
+        if C is not None:
+            self.add_all_c(C)
         self.h = h
         self.val_stats = []
         self.labels = []
@@ -55,6 +57,11 @@ class RejectronModule(pl.LightningModule):
             self.C.append(c_step.get_c())
         else:
             self.C.append(c_step)
+
+    def add_all_c(self, c_step: Iterable[Union[RejectronStep, pl.LightningModule]]):
+        for c in c_step:
+            self.add_new_c(c)
+        return self
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():

@@ -12,21 +12,34 @@ class PQModule(pl.LightningDataModule):
 
     def __init__(
             self,
-            p: Dataset,
-            p_prime: Dataset,
-            q: Subsetable,
-            q_prime: Dataset = None,
+            p: Dataset = None,
+            p_prime: Dataset = None,
+            q: Subsetable = None,
+            datamodule: pl.LightningDataModule = None,
             batch_size=512,
             num_workers=64,
             verbose=True,
             drop_last=False,
     ):
         super().__init__()
+        if datamodule is not None:
+            if hasattr(datamodule, 'train'):
+                p = datamodule.train
+            else:
+                raise ValueError('datamodule must have a train attribute')
+            if hasattr(datamodule, 'val'):
+                p_prime = datamodule.val
+            else:
+                raise ValueError('datamodule must have a val attribute')
+            if hasattr(datamodule, 'test'):
+                q = datamodule.test
+            else:
+                raise ValueError('datamodule must have a test attribute')
+
         self.p = p
         self.q_base_length = len(q)
         self.q = Subsetable(q)
         self.p_prime = p_prime
-        self.q_prime = q_prime
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.print_fn = vprint(verbose=verbose)
@@ -39,17 +52,17 @@ class PQModule(pl.LightningDataModule):
         return self.__dataloader(self.p)
 
     def val_dataloader(self) -> DataLoader:
-        return self.__dataloader(self.p_prime)
+        return self.__dataloader(self.p_prime, shuffle=False)
 
     def test_dataloader(self) -> DataLoader:
         return self.__dataloader(self.q)
 
-    def __dataloader(self, dataset) -> DataLoader:
+    def __dataloader(self, dataset, shuffle=True) -> DataLoader:
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
             # pin_memory=True,
-            shuffle=True,
+            shuffle=shuffle,
             num_workers=self.num_workers,
             drop_last=self.drop_last
         )
@@ -66,6 +79,7 @@ class PQModule(pl.LightningDataModule):
         self.print_fn(f'{"-" * 60}\nRefining Q')
         # refines dataset q to only contains examples accepted by the rejectron-old step
         q_preds = []
+        rs.eval()
         with torch.no_grad():
             for batch in tqdm(
                     DataLoader(self.q, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers)):

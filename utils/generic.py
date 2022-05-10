@@ -1,6 +1,9 @@
 from typing import Dict, Any
+
+import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import inspect
 
 
 def update_functional(args: Dict[str, Any]):
@@ -56,3 +59,11 @@ def compute_mean_and_std(dataset):
 
 def key_replace(dc, pattern):
     return {k.replace(pattern, ''): v for k, v in dc.items()}
+
+
+def dict_print(d):
+    print(pd.DataFrame([d]))
+
+
+def has_arg(func, arg):
+    return arg in inspect.signature(func).parameters

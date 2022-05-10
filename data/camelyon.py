@@ -14,6 +14,8 @@ from .subset import Subsetable, DropMeta
 class CamelyonModule(DetectronDataModule):
 
     def __init__(self, root_dir='/voyager/datasets',
+                 train_samples: Union[int, str] = 70000,
+                 val_samples: Union[int, str] = 10000,
                  batch_size: int = 512,
                  test_seed: int = 42,
                  test_samples: Union[int, str] = 'all',
@@ -22,9 +24,7 @@ class CamelyonModule(DetectronDataModule):
                  return_meta=False,
                  negative_labels=False,
                  small_dev_sets=False,
-                 val_size='all',
-                 predict_seed=0,
-                 predict_samples=10000,
+                 id_val=True
                  ):
         super(CamelyonModule, self).__init__()
         self.save_hyperparameters()
@@ -36,25 +36,25 @@ class CamelyonModule(DetectronDataModule):
         d = Camelyon17Dataset(root_dir=self.root_dir, download=False)
 
         self.train, self.val = [meta(d.get_subset(i, transform=Compose([Resize((224, 224)), ToTensor()])))
-                                for i in ['train', 'val']]
+                                for i in ['train', "id_val" if id_val else "val"]]
+        self.id_val = id_val
 
         if small_dev_sets:
             self.train = Subsetable(self.train)
             self.train.refine_to_amount(100, random_seed=42)
             self.val = Subsetable(self.val)
             self.val.refine_to_amount(100, random_seed=42)
-            predict_samples = 20
-        if val_size != 'all':
-            self.val = Subsetable(self.val)
-            self.val.refine_to_amount(val_size, random_seed=42)
 
-        n_train = len(self.train)
-        self.train, self.predict = random_split(self.train, [n_train - predict_samples, predict_samples],
-                                                generator=torch.Generator().manual_seed(predict_seed))
+        if val_samples != 'all':
+            self.val, _ = random_split(self.val, [val_samples, len(self.val) - val_samples],
+                                       generator=torch.Generator().manual_seed(test_seed))
+        if train_samples != 'all':
+            n_train = len(self.train)
+            self.train, _ = random_split(self.train, [train_samples, n_train - train_samples],
+                                         generator=torch.Generator().manual_seed(0))
 
         self.train_dl = DataLoader(self.train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
         self.val_dl = DataLoader(self.val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-        self.predict_dl = DataLoader(self.predict, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
         self.meta = meta
         self.batch_size = batch_size
@@ -77,9 +77,6 @@ class CamelyonModule(DetectronDataModule):
 
     def test_dataloader(self) -> DataLoader:
         return self.test_dl
-
-    def predict_dataloader(self) -> DataLoader:
-        return self.predict_dl
 
     def configure_test_set(self, test_seed, test_samples, shift, exclusion_amount=None, exclusion_seed=None):
         if self.negative_labels:  # flipped label datasets automatically drop metadata
@@ -111,3 +108,5 @@ class CamelyonModule(DetectronDataModule):
                 f'({len(self.test)})')
 
         self.test_dl = DataLoader(self.test, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+
+
