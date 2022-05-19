@@ -45,9 +45,12 @@ class MLP(Model):
                  optim_params=dict(lr=1e-3, weight_decay=0),
                  scheduler=None,
                  scheduler_params=None,
+                 legacy=True,
                  ):
         self.save_hyperparameters()
         layers = [torch.nn.Linear(input_size, hidden_layers[0])]
+        if not legacy:
+            layers.append(torch.nn.ReLU())
         for i in range(1, len(hidden_layers)):
             layers.append(torch.nn.Linear(hidden_layers[i - 1], hidden_layers[i]))
             layers.append(torch.nn.ReLU(inplace=True))
@@ -61,3 +64,4 @@ class MLP(Model):
         super().__init__(model=model, logger=logger, loss=loss, loss_params=loss_params, optim=optim,
                          optim_params=optim_params, logger_params=logger_params,
                          scheduler=scheduler, scheduler_params=scheduler_params)
+

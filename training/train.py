@@ -35,9 +35,9 @@ class Train:
     @staticmethod
     def uci_mlp(gpu=3):
         dm = UCIHeartModule(batch_size=128, num_workers=8)
-        for seed in range(10):
-            model = MLP(input_size=9, output_size=2, hidden_layers=[256] * 3, dropout=0.3, logger='auc')
-            trainer(model=model, seed=seed, datamodule=dm, run_name=f'uci_mlp_seed{seed}',
+        for seed in range(1):
+            model = MLP(input_size=9, output_size=2, hidden_layers=[16] * 3, dropout=0.3, logger='auc', legacy=False)
+            trainer(model=model, seed=seed, datamodule=dm, run_name=f'uci_mlp16_seed{seed}',
                     ckpt_path=f'checkpoints/uci/baselines2', monitor='val_auc',
                     max_epochs=1000, patience=100, look_for_checkpoints=False, log_every_n_steps=20,
                     gpus=[gpu] if isinstance(gpu, int) else None, offline=True)

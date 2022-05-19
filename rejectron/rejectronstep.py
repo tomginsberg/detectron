@@ -8,6 +8,7 @@ from losses.ce_negative import ce_negative_labels_from_logits
 from rejectron.metrics import RejectronMetric
 from models import pretrained
 from utils.generic import dict_print
+from torch.nn import functional as F
 
 
 # from detectron.plotting import plot_2d_decision_boundary
@@ -67,12 +68,14 @@ class RejectronStep(pl.LightningModule):
         self.n_test = n_test
         self.beta = beta
         self.alpha = 1 / (self.n_test + beta) if alpha is None else alpha
-        self.rejectron_metric = RejectronMetric(beta=beta)
-        self.rejectron_metric_val = RejectronMetric(beta=beta, val_metric=True)
+        self.weight = torch.nn.Parameter(torch.tensor([5 * self.alpha, 1]), requires_grad=False)
+        self.rejectron_metric = RejectronMetric(beta=beta, domain_metric=domain_classifier)
+        self.rejectron_metric_val = RejectronMetric(beta=beta, val_metric=True, domain_metric=domain_classifier)
         self.train_metrics = {}
         self.val_metrics = {}
         self.epoch = 0
         self.domain_classifier = domain_classifier
+        self.dc_correction = torch.nn.Parameter(torch.tensor([-.1, .1]), requires_grad=False)
 
     # def on_train_start(self) -> None:
     #     if self.va is not None:
@@ -89,12 +92,19 @@ class RejectronStep(pl.LightningModule):
             h_pred[labels < 0] = -h_pred[labels < 0] - 1
         else:
             labels[labels >= 0] = torch.ones_like(labels[labels >= 0])
-            labels[labels < 0] = -torch.ones_like(labels[labels < 0])
+            labels[labels < 0] = torch.zeros_like(labels[labels < 0])
             h_pred = labels
 
         c_logits = self.c(data)
+        if self.domain_classifier:
+            c_logits = c_logits + self.dc_correction
+            # if (c_logits.argmax(dim=1) == 1).all():
+
         self.rejectron_metric.update(labels=labels, c_logits=c_logits, h_pred=h_pred)
-        loss = ce_negative_labels_from_logits(c_logits, h_pred, alpha=self.alpha)
+        if self.domain_classifier:
+            loss = F.cross_entropy(c_logits, labels, weight=self.weight)
+        else:
+            loss = ce_negative_labels_from_logits(c_logits, h_pred, alpha=self.alpha)
         return loss
 
     def training_epoch_end(self, outputs) -> None:
@@ -110,11 +120,18 @@ class RejectronStep(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         data, labels = batch
-        with torch.no_grad():
-            # find the predictions made by h on this batch
-            h_pred = self.h(data).argmax(dim=1)
+        if not self.domain_classifier:
+            with torch.no_grad():
+                # find the predictions made by h on this batch
+                h_pred = self.h(data).argmax(dim=1)
+        else:
+            labels[labels >= 0] = torch.ones_like(labels[labels >= 0])
+            labels[labels < 0] = torch.zeros_like(labels[labels < 0])
+            h_pred = labels
 
         c_logits = self.c(data)
+        if self.domain_classifier:
+            c_logits = c_logits + self.dc_correction
 
         self.rejectron_metric_val.update(labels=labels, c_logits=c_logits, h_pred=h_pred)
 
@@ -145,6 +162,13 @@ class RejectronStep(pl.LightningModule):
 
     def selective_classify(self, x):
         with torch.no_grad():
+            if self.domain_classifier:
+                # return 1 for in domain, and -1 for out of domain
+                y = self.c(x) + self.dc_correction
+                y = y.argmax(dim=-1)
+                y[y == 0] = - torch.ones_like(y[y == 0])
+                return y
+
             y_h = torch.argmax(self.h(x), dim=1)
             y_c = torch.argmax(self.c(x), dim=1)
             mask = y_c != y_h

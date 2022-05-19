@@ -8,6 +8,7 @@ from rejectron.rejectronstep import RejectronStep
 from typing import Any
 from tqdm import tqdm
 from copy import deepcopy
+from shift_detection.shiftdetection import ensemble_entropy
 
 
 class CWarpper(pl.LightningModule):
@@ -37,8 +38,11 @@ class RejectronModule(pl.LightningModule):
         self.val_stats = []
         self.labels = []
 
-    def load_from_directory(self, directory: str, sort_key=None, cls=None):
-        ckpts = glob(path.join(directory, "*.ckpt"))
+    def load_from_directory(self, directory: str, sort_key=None, cls=None, sub_dirs=True):
+        if sub_dirs:
+            ckpts = glob(path.join(directory, "*", "last.ckpt"))
+        else:
+            ckpts = glob(path.join(directory, "*.ckpt"))
         if sort_key is not None:
             sort_key = lambda x: int(x.split('/')[-1].split('_')[0][1:])
 
@@ -63,6 +67,12 @@ class RejectronModule(pl.LightningModule):
             self.add_new_c(c)
         return self
 
+    def eval(self):
+        print('Setting module to eval mode')
+        self.h.eval()
+        for c in self.C:
+            c.eval()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             y = torch.argmax(self.h.forward(x), dim=1)
@@ -73,6 +83,15 @@ class RejectronModule(pl.LightningModule):
                 y[mask] = -1
 
             return y
+
+    def logits(self, x) -> torch.Tensor:
+        with torch.no_grad():
+            logits = torch.stack([self.h(x), *[c(x) for c in self.C]], dim=0)
+            return logits
+
+    def entropy(self, x) -> torch.Tensor:
+        with torch.no_grad():
+            return ensemble_entropy(self.logits(x))
 
     def get_val_stats(self) -> Dict[str, torch.Tensor]:
         stats = torch.cat(self.val_stats, dim=0)

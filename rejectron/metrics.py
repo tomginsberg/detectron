@@ -9,7 +9,7 @@ def itemize(dict_: Dict[str, Union[torch.Tensor, float]]) -> Dict[str, float]:
 
 
 class RejectronMetric(Metric):
-    def __init__(self, beta=1, val_metric=False):
+    def __init__(self, beta=1, val_metric=False, domain_metric=False):
         super().__init__()
 
         # track number of samples in p that h and c agree on
@@ -29,6 +29,7 @@ class RejectronMetric(Metric):
 
         self.beta = beta
         self.val = val_metric
+        self.domain = domain_metric
 
     def update(self, labels: torch.Tensor, c_logits: torch.Tensor, h_pred: torch.Tensor):
         """
@@ -41,8 +42,8 @@ class RejectronMetric(Metric):
 
         """
         c_pred = c_logits.argmax(dim=1)
-
-        p_label_indices = labels >= 0
+        # if domain is true we know h_pred == labels
+        p_label_indices = labels >= 0 if not self.domain else labels == 1
         q_label_indices = ~p_label_indices
 
         num_p = p_label_indices.sum()
@@ -61,9 +62,15 @@ class RejectronMetric(Metric):
         elif (q_label_indices == True).all():
             # every sample is from q
             p_agree = 0
-            q_disagree = (c_pred != h_pred)
-            self.acc_q.update(c_pred[~q_disagree], -labels[~q_disagree] - 1)
-            self.acc_q_all.update(c_pred, -labels - 1)
+            if self.domain:
+                q_disagree = (c_pred == h_pred)
+                # this is meaningless here, but we log it just for consistency
+                self.acc_q.update(c_pred[q_disagree], labels[q_disagree])
+                self.acc_q_all.update(c_pred, labels)
+            else:
+                q_disagree = (c_pred != h_pred)
+                self.acc_q.update(c_pred[~q_disagree], -labels[~q_disagree] - 1)
+                self.acc_q_all.update(c_pred, -labels - 1)
             q_disagree = q_disagree.sum().item()
 
         else:
@@ -74,17 +81,26 @@ class RejectronMetric(Metric):
             q_labels = labels[q_label_indices]
 
             self.acc_p_all.update(c_p, p_labels)
-            self.acc_q_all.update(c_q, -q_labels - 1)
+            if self.domain:
+                self.acc_q_all.update(c_q, q_labels)
+            else:
+                self.acc_q_all.update(c_q, -q_labels - 1)
 
             p_mask = (c_p == h_pred[p_label_indices])
-            q_mask = (c_q != h_pred[q_label_indices])
+            if not self.domain:
+                q_mask = (c_q == h_pred[q_label_indices])
+            else:
+                q_mask = (c_q != h_pred[q_label_indices])
 
             # updates accuracy metrics where h and c agree
             if (p_agree := p_mask.sum().item()) > 0:
                 self.acc_p.update(c_p[p_mask], p_labels[p_mask])
 
             if (~q_mask).sum().item() > 0:
-                self.acc_q.update(c_q[~q_mask], -q_labels[~q_mask] - 1)
+                if not self.domain:
+                    self.acc_q.update(c_q[~q_mask], -q_labels[~q_mask] - 1)
+                else:
+                    self.acc_q.update(c_q[~q_mask], q_labels[~q_mask])
 
             q_disagree = q_mask.sum().item()
 

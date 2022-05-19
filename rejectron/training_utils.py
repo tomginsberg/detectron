@@ -58,7 +58,7 @@ def rejectron_trainer(save_directory: str = None, run_name: str = None,
         callbacks = []
         if not dryrun:
             callbacks.append(pl.callbacks.ModelCheckpoint(
-                save_directory,
+                join(save_directory, f'c{iteration}'),
                 filename=f'c{iteration}_' + '{epoch}_{p_q_score:.5f}',
                 save_top_k=1,
                 save_last=True,
@@ -115,13 +115,14 @@ def train_rejectors(pq: PQModule,
                     logfile: Optional[str] = None,
                     patience: int = 5,
                     alpha=None,
-                    benchmark_file: Optional[str] = None):
+                    benchmark_file: Optional[str] = None,
+                    domain_classifier=False):
     size_of_q = len(pq.q)
     count = 0
     os.makedirs(os.path.split(logfile)[0], exist_ok=True)
 
-    df = benchmark(h, pq, trainer(0).gpus, cached=benchmark_file)
-    init_val_acc = df['val_acc_all'].item()
+    df = benchmark(h, pq, trainer(0).gpus, cached=benchmark_file) if not domain_classifier else pd.DataFrame()
+    init_val_acc = torch.tensor(1.0) if domain_classifier else torch.tensor(df['val_acc_all'].item())
     print(df.to_string())
     # rm = RejectronModule(h)
 
@@ -129,7 +130,7 @@ def train_rejectors(pq: PQModule,
         h = create_model()
         c = create_model()
         c_step = RejectronStep(h, c=c, n_train=pq.n_train, n_test=pq.n_test, alpha=alpha,
-                               )
+                               domain_classifier=domain_classifier)
         tr = trainer(i)
         for idx, _ in enumerate(tr.callbacks):
             if isinstance(tr.callbacks[idx], MetricDrop):
@@ -140,6 +141,7 @@ def train_rejectors(pq: PQModule,
         # rm.add_new_c(c_step)
 
         lq_1 = len(pq.q)
+        c_step.eval()
         pq.refine(rs=c_step)
         lq_2 = len(pq.q)
 

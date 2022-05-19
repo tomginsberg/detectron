@@ -35,7 +35,7 @@ def all_camelyon_model(return_names=False, device='cuda:1', wilds=False, eval_=T
                     range(10)]
 
 
-def camelyon_model(seed=0, wilds=False):
+def camelyon_model(seed=0, wilds=False, domain_classifier=False):
     """
     Loads the pretrained model from the Camelyon dataset.
     """
@@ -50,6 +50,8 @@ def camelyon_model(seed=0, wilds=False):
     else:
         ckpt = glob(f'{CKPT_PATH}/camelyon/baselines/camelyon_resnet18_pretrained_seed{seed}/*.ckpt')[0]
         model = TorchvisionClassifier.load_from_checkpoint(ckpt)
+    if domain_classifier:
+        model = _to_binary_output(model)
 
     return model
 
@@ -70,11 +72,15 @@ def distillbert_on_civilcomments(seed=0, lr='1e-6', device='cuda:1', group_by_y=
 
 
 def resnet18_trained_on_cifar10(ckp='cifar/cifar10_resnet18/epoch=197-step=77417.ckpt',
-                                prefix: Optional[str] = CKPT_PATH):
+                                prefix: Optional[str] = CKPT_PATH, domain_classifier=False):
     model = TorchvisionClassifier(out_features=10, model='resnet18')
+
     if isinstance(prefix, str):
         ckp = os.path.join(prefix, ckp)
     model.load_state_dict(torch.load(ckp)['state_dict'])
+
+    if domain_classifier:
+        model = _to_binary_output(model)
     return model
 
 
@@ -93,7 +99,10 @@ def resnet18_collection_trained_on_cifar10(return_names=False, device='cuda:1', 
 
 
 def mlp_trained_on_uci_heart(seed=0):
-    path = glob(f'{CKPT_PATH}/uci/baselines2/uci_mlp_seed{seed}/*.ckpt')[0]
+    if seed == 16:
+        path = glob(f'{CKPT_PATH}/uci/baselines2/uci_mlp16_seed0/*.ckpt')[0]
+    else:
+        path = glob(f'{CKPT_PATH}/uci/baselines2/uci_mlp_seed{seed}/*.ckpt')[0]
     return MLP.load_from_checkpoint(path)
 
 
@@ -107,3 +116,9 @@ def mlp_collection_trained_on_uci_heart(return_names=False, device='cuda:1', eva
         return models
     return models, [f'uci_heart_seed{seed}' for seed in
                     range(10)]
+
+
+def _to_binary_output(model):
+    assert hasattr(model.model, 'fc'), 'Model must have a fully connected layer named fc'
+    model.model.fc = torch.nn.Linear(model.model.fc.in_features, 2)
+    return model

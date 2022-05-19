@@ -1,4 +1,5 @@
 import random
+import warnings
 from os.path import join
 from typing import Union, Collection, Tuple
 
@@ -186,9 +187,13 @@ class CIFAR10DataModule(LightningDataModule):
             num_workers: int = 96 // 2,
             negative_labels=True,
             return_meta=False,
-            split_val=True
+            split_val=True,
+            train_samples=None,
+            val_samples=None,
     ):
         super().__init__()
+        if train_samples is not None or val_samples is not None:
+            warnings.warn('train_samples and val_samples cannot be specified, arguments exist only for compatibility')
         if test_samples != 'all':
             if shift:
                 assert test_samples <= 10000

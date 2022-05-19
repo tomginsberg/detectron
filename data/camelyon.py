@@ -24,9 +24,13 @@ class CamelyonModule(DetectronDataModule):
                  return_meta=False,
                  negative_labels=False,
                  small_dev_sets=False,
-                 id_val=True
+                 id_val=True,
+                 test_domain=5,
                  ):
         super(CamelyonModule, self).__init__()
+        assert test_domain in {4, 5}, f'Test domain must be either hospital 4 or 5, not {test_domain}'
+        self.test_split = {5: 'test', 4: 'val'}[
+            test_domain]  # the val split is from hospital 4, the test split is from hospital 5
         self.save_hyperparameters()
         self.root_dir = root_dir
         meta = lambda x: x
@@ -90,7 +94,7 @@ class CamelyonModule(DetectronDataModule):
         if not shift:
             self.test = self.val
         else:
-            self.test = f(self.d.get_subset('test', transform=Compose([Resize((224, 224)), ToTensor()])))
+            self.test = f(self.d.get_subset(self.test_split, transform=Compose([Resize((224, 224)), ToTensor()])))
 
         if self.negative_labels:
             self.test = FlippedLabels(self.test)
@@ -108,5 +112,3 @@ class CamelyonModule(DetectronDataModule):
                 f'({len(self.test)})')
 
         self.test_dl = DataLoader(self.test, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
-
-

@@ -163,7 +163,7 @@ class ShiftDetection:
 
     def get_logits_from_file(self, name) -> Tuple[torch.Tensor, torch.Tensor]:
         data = torch.load(f'{self.logit_path}/{name}.pt')
-        assert data['model_names'] == self.model_names, 'Model names do not match'
+        # assert data['model_names'] == self.model_names, 'Model names do not match'
         return data['logits'], data['labels']
 
     @staticmethod
