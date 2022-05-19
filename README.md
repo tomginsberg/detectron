@@ -1,5 +1,7 @@
 # Detectron: A learning based hypothesis test for covariate shift
 
+![](https://i.imgur.com/k7C9V1U.png)
+
 ## Setup
 Full setup instructions in progress. For now `pip install -r requirements.txt`
 
