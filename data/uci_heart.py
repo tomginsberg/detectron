@@ -1,3 +1,4 @@
+import json
 from typing import Union
 
 import pytorch_lightning as pl
@@ -5,14 +6,17 @@ import torch
 from os import path
 from torch.utils.data import random_split
 from data.flipped import FlippedLabels
+from data.util import get_dataset_path
 
 
 class UCIHeartModule(pl.LightningDataModule):
-    def __init__(self, root='/voyager/datasets/UCI', shift=True, test_samples: Union[int, str] = 'all',
+    def __init__(self, root_dir=None, shift=True, test_samples: Union[int, str] = 'all',
                  test_seed=0, batch_size=32, num_workers: int = 96 // 2, negative_labels=True,
                  combine_val_and_test=False):
         super(UCIHeartModule, self).__init__()
-        self.data = torch.load(path.join(root, 'uci_heart_torch.pt'))
+        if root_dir is None:
+            root_dir = get_dataset_path('uci_heart')
+        self.data = torch.load(path.join(root_dir, 'uci_heart_torch.pt'))
         self.train = self.data['train']
         self.ood_test = self.data['ood_test']
         self.iid_test = self.data['iid_test']

@@ -1,3 +1,4 @@
+import json
 import random
 import warnings
 from os.path import join
@@ -15,6 +16,8 @@ from tqdm import tqdm
 from data.flipped import FlippedLabels
 import pandas as pd
 import matplotlib.pyplot as plt
+
+from data.util import get_dataset_path
 from utils.image_transforms import UnNormalize
 
 TransformType = Union[
@@ -24,11 +27,14 @@ MEAN, STD = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
 
 
 class CIFAR10C(Dataset):
-    def __init__(self, root='/voyager/datasets/', shift_types=('frost', 'fog', 'snow'), seed=42, num_images=10000,
+    def __init__(self, root_dir=None, shift_types=('frost', 'fog', 'snow'), seed=42, num_images=10000,
                  severity_range=(3, 5), negative_labels=True, return_meta=False):
+        super(CIFAR10C, self).__init__()
+        if root_dir is None:
+            root_dir = get_dataset_path('cifar10C')
         self.num_images = num_images
-        _images = [np.load(join(root, 'CIFAR-10-C', x + '.npy')) for x in shift_types]
-        _labels = np.load(join(root, 'CIFAR-10-C', 'labels.npy')).astype(int)
+        _images = [np.load(join(root_dir, 'CIFAR-10-C', x + '.npy')) for x in shift_types]
+        _labels = np.load(join(root_dir, 'CIFAR-10-C', 'labels.npy')).astype(int)
 
         rd = random.Random(seed)
         severity = np.array([rd.randint(severity_range[0] - 1, severity_range[1] - 1) for _ in range(num_images)])
@@ -97,27 +103,30 @@ class CIFAR10_1(Dataset):
         return self.images[index], label.item()
 
     @staticmethod
-    def create(root='/voyager/datasets/'):
-        c10_1 = np.load(join(root, 'cifar-10-1/cifar10.1_v6_data.npy'))
-        c10_1_l = np.load(join(root, 'cifar-10-1/cifar10.1_v6_labels.npy'))
+    def create(root_dir='/voyager/datasets/'):
+        c10_1 = np.load(join(root_dir, 'cifar-10-1/cifar10.1_v6_data.npy'))
+        c10_1_l = np.load(join(root_dir, 'cifar-10-1/cifar10.1_v6_labels.npy'))
         c10_1_l = torch.from_numpy(c10_1_l)
         c10_1 = torch.from_numpy(c10_1).permute(0, 3, 1, 2).float() / 255.0
         tf = transforms.Normalize(MEAN, STD)
         c10_1 = torch.stack(
             [tf(x) for x in tqdm(c10_1)])
-        torch.save(c10_1, join(root, 'cifar-10-1', 'cifar10.1_v6_data.pt'))
-        torch.save(c10_1_l, join(root, 'cifar-10-1', 'cifar10.1_v6_labels.pt'))
+        torch.save(c10_1, join(root_dir, 'cifar-10-1', 'cifar10.1_v6_data.pt'))
+        torch.save(c10_1_l, join(root_dir, 'cifar-10-1', 'cifar10.1_v6_labels.pt'))
 
 
 class CIFAR10CFrostFogSnow(Dataset):
-    def __init__(self, root='/voyager/datasets/',
+    def __init__(self, root_dir=None,
                  negative_labels=True,
                  return_meta=False,
                  test_seed: int = 42,
                  test_samples: Union[int, str] = 'all', ):
+        super(CIFAR10CFrostFogSnow, self).__init__()
+        if root_dir is None:
+            root_dir = get_dataset_path('cifar10C')
         self.return_meta = return_meta
-        self.images = torch.load(join(root, 'CIFAR-10-C', 'frost-fog-snow.pt'))
-        self.labels = pd.read_csv(join(root, 'CIFAR-10-C', 'frost-fog-snow.csv'))
+        self.images = torch.load(join(root_dir, 'CIFAR-10-C', 'frost-fog-snow.pt'))
+        self.labels = pd.read_csv(join(root_dir, 'CIFAR-10-C', 'frost-fog-snow.csv'))
         if test_samples != 'all':
             assert test_seed <= len(self.images), f'test_seed must be <= {len(self.images)}'
             # randomly take test_samples from the test set
@@ -139,8 +148,10 @@ class CIFAR10CFrostFogSnow(Dataset):
         return self.images[index], label
 
     @staticmethod
-    def create(root='/voyager/datasets/'):
-        dm = CIFAR10C(return_meta=True, negative_labels=False)
+    def create(root=None):
+        dm = CIFAR10C(root_dir=None, return_meta=True, negative_labels=False)
+        if root is None:
+            root = get_dataset_path('cifar10C')
         ims = []
         data = []
         for im, (label, severity, corruption) in dm:
@@ -177,7 +188,7 @@ class CIFAR10DataModule(LightningDataModule):
                      'cifar-10-1'}
 
     def __init__(
-            self, root: str = '/voyager/datasets/',
+            self, root_dir: str = None,
             batch_size: int = 512,
             test_seed: int = 42,
             test_samples: Union[int, str] = 'all',
@@ -192,6 +203,8 @@ class CIFAR10DataModule(LightningDataModule):
             val_samples=None,
     ):
         super().__init__()
+        if root_dir is None:
+            root_dir = get_dataset_path('cifar10')
         if train_samples is not None or val_samples is not None:
             warnings.warn('train_samples and val_samples cannot be specified, arguments exist only for compatibility')
         if test_samples != 'all':
@@ -213,14 +226,14 @@ class CIFAR10DataModule(LightningDataModule):
             transforms.ToTensor(),
             transforms.Normalize(MEAN, STD)
         ])
-        self.train = torchvision.datasets.CIFAR10(root, train=True, transform=self.transform_train)
-        self.val = torchvision.datasets.CIFAR10(root, train=False, transform=self.transform_val)
+        self.train = torchvision.datasets.CIFAR10(root_dir, train=True, transform=self.transform_train)
+        self.val = torchvision.datasets.CIFAR10(root_dir, train=False, transform=self.transform_val)
         if split_val:
             self.val, iid_test = torch.utils.data.random_split(self.val, [9000, 1000], torch.Generator().manual_seed(0))
         else:
             iid_test = ValueError()  # should not refer to iid_test if split_val=False
         self.batch_size = batch_size
-        self.root = root
+        self.root = root_dir
 
         if test_samples == 'all':
             if ~shift:
@@ -243,20 +256,20 @@ class CIFAR10DataModule(LightningDataModule):
             # special cases
             if shift_types == 'frost-fog-snow':
                 self.test = CIFAR10CFrostFogSnow(
-                    root, test_samples=test_samples,
+                    root_dir=None, test_samples=test_samples,
                     test_seed=test_seed,
                     negative_labels=negative_labels,
                     return_meta=return_meta
                 )
             elif shift_types == 'cifar-10-1':
                 self.test = CIFAR10_1(
-                    root, test_samples=test_samples,
+                    root_dir, test_samples=test_samples,
                     test_seed=test_seed,
                     negative_labels=negative_labels,
                 )
             # generic 10C dataset
             else:
-                self.test = CIFAR10C(root=root, shift_types=shift_types, severity_range=shift_severity_range,
+                self.test = CIFAR10C(root_dir=None, shift_types=shift_types, severity_range=shift_severity_range,
                                      negative_labels=negative_labels, seed=test_seed, num_images=test_samples,
                                      return_meta=return_meta)
         else:

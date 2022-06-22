@@ -9,11 +9,12 @@ from wilds.datasets.camelyon17_dataset import Camelyon17Dataset
 from .base import DetectronDataModule
 from .flipped import FlippedLabels
 from .subset import Subsetable, DropMeta
+import json
 
 
 class CamelyonModule(DetectronDataModule):
 
-    def __init__(self, root_dir='/voyager/datasets',
+    def __init__(self, root_dir=None,
                  train_samples: Union[int, str] = 70000,
                  val_samples: Union[int, str] = 10000,
                  batch_size: int = 512,
@@ -28,6 +29,8 @@ class CamelyonModule(DetectronDataModule):
                  test_domain=5,
                  ):
         super(CamelyonModule, self).__init__()
+        if root_dir is None:
+            root_dir = json.load(open('paths.json'))['camelyon17']
         assert test_domain in {4, 5}, f'Test domain must be either hospital 4 or 5, not {test_domain}'
         self.test_split = {5: 'test', 4: 'val'}[
             test_domain]  # the val split is from hospital 4, the test split is from hospital 5
